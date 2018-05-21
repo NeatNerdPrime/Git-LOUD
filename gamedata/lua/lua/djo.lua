@@ -15,26 +15,24 @@
 local GetArmyStat = moho.aibrain_methods.GetArmyStat
 local firstRunComplete = 0
 local nextLogTime = 0
-local logIncrement = 10 -- in seconds
-
-function tablelength(T)
-  local count = 0
-  for _ in pairs(T) do count = count + 1 end
-  return count
-end
+local logIncrement = 10 -- in seconds (debuggins 10 seconds, real run value 5*60)
+local GetListOfUnits = moho.aibrain_methods.GetListOfUnits
 
 function djoFn(Brains)
 	local outputStringLine = ""
 	--LOG( 'DJO: Current Brain Mass Income:' .. GetArmyStat( brain, "Economy_Income_Mass", 0.0 ).Value )
 	if(firstRunComplete == 0) then
 		firstRunComplete = 1
-		numBrains = tablelength(Brains)
+		numBrains = table.getn(Brains)  -- change to table.getn
 		LOG( 'DJO: DJO hooked in and ready to log data' )
 		LOG( 'DJO: num brains = ' .. numBrains)
 		outputStringLine = outputStringLine .. "Time" .. ","
+
+		-- Add one line below for each statistic to be tracked
 		for i = 1,numBrains do
 			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "MassInc" .. ","
 			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "EnrgInc" .. ","
+			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "BldPowr" .. ","
 		end
 		LOG('DJO:' .. outputStringLine)
 	end
@@ -44,11 +42,35 @@ function djoFn(Brains)
 		nextLogTime = nextLogTime + logIncrement
 		outputStringLine = outputStringLine .. GetGameTimeSeconds() .. ","
 		for index, brain in Brains do
-			outputStringLine = outputStringLine .. GetArmyStat( brain, "Economy_Income_Mass", 0.0).Value .. ","
-			outputStringLine = outputStringLine .. GetArmyStat( brain, "Economy_Income_Energy", 0.0).Value .. ","
+			if(not ArmyIsOutOfGame(ArmyBrains[index].ArmyIndex)) then 
+
+				-- Record pre-generated statistics
+				outputStringLine = outputStringLine .. GetArmyStat( brain, "Economy_Income_Mass", 0.0).Value*10 .. ","
+				outputStringLine = outputStringLine .. GetArmyStat( brain, "Economy_Income_Energy", 0.0).Value*10 .. ","
+
+				-- Build Power: Generate statistic from game data
+				local brnEngies = brain:GetListOfUnits(categories.ENGINEER, false)
+				local curBuildPower = 0
+				for index, curEng in brnEngies do
+					curBuildPower = GetBlueprint(brnEngies[index]).Economy.BuildRate + curBuildPower
+				end -- Engies Loop
+				outputStringLine = outputStringLine .. curBuildPower .. ","
+
+			end -- (out of game) if check
 		end	-- Brains For Loop
 		LOG('DJO:' .. outputStringLine)
-
+		
 	end -- Main time limiting loop
 	
+	
+	
 end -- End djoFn
+
+
+-- simlua LOG(ArmyIsOutOfGame(1))
+-- simLua LOG(ArmyIsOutOfGame(ArmyBrains[1].ArmyIndex))
+-- simLua LOG(table.getn(ArmyBrains))
+--local brnEngies = ArmyBrains[1]:GetListOfUnits(categories.ENGINEER - categories.COMMAND, false)
+--	local djoBrains = ArmyBrains
+--	local brain = Brains[1]
+-- simlua LOG(GetBlueprint(brnEngies[1]).Economy.BuildRate)
