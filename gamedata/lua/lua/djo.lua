@@ -33,6 +33,7 @@ function djoFn(Brains)
 			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "MassInc" .. ","
 			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "EnrgInc" .. ","
 			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "BldPowr" .. ","
+			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "MassIn2" .. ","
 		end
 		LOG('DJO:' .. outputStringLine)
 	end
@@ -44,23 +45,43 @@ function djoFn(Brains)
 		for index, brain in Brains do
 			if(not ArmyIsOutOfGame(ArmyBrains[index].ArmyIndex)) then 
 
-				-- Record pre-generated statistics
+				-- **** Game generatored Mass/Energy Stats
 				outputStringLine = outputStringLine .. GetArmyStat( brain, "Economy_Income_Mass", 0.0).Value*10 .. ","
 				outputStringLine = outputStringLine .. GetArmyStat( brain, "Economy_Income_Energy", 0.0).Value*10 .. ","
 
-				-- Build Power: Generate statistic from game data
-				local brnEngies = brain:GetListOfUnits(categories.ENGINEER, false)
+				-- **** Build Power
 				local curBuildPower = 0
+				local brnEngies = brain:GetListOfUnits(categories.ENGINEER - categories.ENGINEERSTATION, false)
+				
 				for index, curEng in brnEngies do
-					curBuildPower = GetBlueprint(brnEngies[index]).Economy.BuildRate + curBuildPower
+					curBuildPower = curEng:GetBlueprint().Economy.BuildRate + curBuildPower
 				end -- Engies Loop
 				outputStringLine = outputStringLine .. curBuildPower .. ","
 
+				-- **** Improved Mass Algo
+				local curCalcMassProd = 0
+				local brnComs = brain:GetListOfUnits(categories.COMMAND, false)  -- List of Commanders
+				local brnSubComs = brain:GetListOfUnits(categories.SUBCOMMANDER, false)  -- List of Sub Commanders
+				local brnMassExtFabs = brain:GetListOfUnits(categories.MASSPRODUCTION, false)  -- List of Extractors and Fabs
+
+				for index, curCom in brnComs do
+					curCalcMassProd = curCom:GetBlueprint().Economy.ProductionPerSecondMass + curCalcMassProd
+				end -- Commanders Loop
+				for index, curSCom in brnSubComs do
+					curCalcMassProd = curSCom:GetBlueprint().Economy.ProductionPerSecondMass + curCalcMassProd
+				end -- Sub-Commanders Loop
+				for index, curMassEF in brnMassExtFabs do
+					curCalcMassProd = curMassEF:GetBlueprint().Economy.ProductionPerSecondMass + curCalcMassProd
+				end -- Mass Extractor/Fab Loop
+				outputStringLine = outputStringLine .. curCalcMassProd .. ","
+
+				
+				
 			end -- (out of game) if check
 		end	-- Brains For Loop
 		LOG('DJO:' .. outputStringLine)
 		
-	end -- Main time limiting loop
+	end -- Main time limiting if statement
 	
 	
 	
