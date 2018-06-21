@@ -9,13 +9,13 @@
 -- To Implement place the following into aibrain.lua
 -- Somewhere after "local import" statement on approx. line 34:
 -- local djoFn = import('/lua/djo.lua').djoFn
--- In main while true loop:
+-- In main "while true" loop (search for "for the entire session"):
 -- djoFn(Brains)
 
 local GetArmyStat = moho.aibrain_methods.GetArmyStat
 local firstRunComplete = 0
 local nextLogTime = 0
-local logIncrement = 10 -- in seconds (debuggins 10 seconds, real run value 5*60)
+local logIncrement = 10 --5*60 -- in seconds (debuggins 10 seconds, real run value 5*60)
 local GetListOfUnits = moho.aibrain_methods.GetListOfUnits
 
 function djoFn(Brains)
@@ -30,10 +30,10 @@ function djoFn(Brains)
 
 		-- Add one line below for each statistic to be tracked
 		for i = 1,numBrains do
-			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "MassInc" .. ","
-			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "EnrgInc" .. ","
-			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "BldPowr" .. ","
-			outputStringLine = outputStringLine .. "Brain_" .. i .. "_" .. "MassIn2" .. ","
+			outputStringLine = outputStringLine .. "Brain" .. i .. "_" .. "MassInc" .. ","
+			outputStringLine = outputStringLine .. "Brain" .. i .. "_" .. "EnrgInc" .. ","
+			outputStringLine = outputStringLine .. "Brain" .. i .. "_" .. "BldPowr" .. ","
+			outputStringLine = outputStringLine .. "Brain" .. i .. "_" .. "MassIn" .. ","
 		end
 		LOG('DJO:' .. outputStringLine)
 	end
@@ -63,20 +63,28 @@ function djoFn(Brains)
 				local brnComs = brain:GetListOfUnits(categories.COMMAND, false)  -- List of Commanders
 				local brnSubComs = brain:GetListOfUnits(categories.SUBCOMMANDER, false)  -- List of Sub Commanders
 				local brnMassExtFabs = brain:GetListOfUnits(categories.MASSPRODUCTION, false)  -- List of Extractors and Fabs
+				local brnHydros = brain:GetListOfUnits(categories.HYDROCARBON, false)  -- List of Hydrocarbons
+				-- yes T4 hydro has 2 mass/sec, we don't know why
 
 				for index, curCom in brnComs do
-					curCalcMassProd = curCom:GetBlueprint().Economy.ProductionPerSecondMass + curCalcMassProd
+					curCalcMassProd = curCom:GetProductionPerSecondMass() + curCalcMassProd
 				end -- Commanders Loop
 				for index, curSCom in brnSubComs do
-					curCalcMassProd = curSCom:GetBlueprint().Economy.ProductionPerSecondMass + curCalcMassProd
+					curCalcMassProd = curSCom:GetProductionPerSecondMass() + curCalcMassProd
 				end -- Sub-Commanders Loop
 				for index, curMassEF in brnMassExtFabs do
 					curCalcMassProd = curMassEF:GetBlueprint().Economy.ProductionPerSecondMass + curCalcMassProd
 				end -- Mass Extractor/Fab Loop
+				for index, curHydros in brnHydros do
+					curCalcMassProd = curHydros:GetProductionPerSecondMass() + curCalcMassProd
+				end -- Mass Extractor/Fab Loop
 				outputStringLine = outputStringLine .. curCalcMassProd .. ","
-
-				
-				
+			
+			else 
+				outputStringLine = outputStringLine .. 0 .. ","
+				outputStringLine = outputStringLine .. 0 .. ","
+				outputStringLine = outputStringLine .. 0 .. ","
+				outputStringLine = outputStringLine .. 0 .. ","
 			end -- (out of game) if check
 		end	-- Brains For Loop
 		LOG('DJO:' .. outputStringLine)
