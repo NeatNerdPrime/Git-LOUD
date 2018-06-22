@@ -14,92 +14,131 @@
 
 local GetArmyStat = moho.aibrain_methods.GetArmyStat
 local firstRunComplete = 0
-local nextLogTime = 0
-local logIncrement = 10 --5*60 -- in seconds (debuggins 10 seconds, real run value 5*60)
+local nextLogTime = 0.0
+local logIncrement = 10.0 --5*60.0 -- in seconds (debuggins 10 seconds, real run value 5*60)
 local GetListOfUnits = moho.aibrain_methods.GetListOfUnits
 
 function djoFn(Brains)
 	local outputStringLine = ""
-	--LOG( 'DJO: Current Brain Mass Income:' .. GetArmyStat( brain, "Economy_Income_Mass", 0.0 ).Value )
+
 	if(firstRunComplete == 0) then
 		firstRunComplete = 1
-		numBrains = table.getn(Brains)  -- change to table.getn
+		local numRecorded = 0
+		local numBrains = table.getn(Brains)  -- change to table.getn
 		LOG( 'DJO: DJO hooked in and ready to log data' )
-		LOG( 'DJO: num brains = ' .. numBrains)
+		LOG( 'DJO: ' .. numBrains .. ' brains detected.')
 		outputStringLine = outputStringLine .. "Time" .. ","
 
-		-- Add one line below for each statistic to be tracked
-		for i = 1,numBrains do
-			outputStringLine = outputStringLine .. "Brain" .. i .. "_" .. "MassInc" .. ","
-			outputStringLine = outputStringLine .. "Brain" .. i .. "_" .. "EnrgInc" .. ","
-			outputStringLine = outputStringLine .. "Brain" .. i .. "_" .. "BldPowr" .. ","
-			outputStringLine = outputStringLine .. "Brain" .. i .. "_" .. "MassIn" .. ","
+		for index, brain in Brains do
+			if(not ArmyIsCivilian(ArmyBrains[index].ArmyIndex) ) then 
+				numRecorded = numRecorded + 1
+				local curNickname = brain.Nickname
+				outputStringLine = outputStringLine .. curNickname .. "_" .. "EnergInc" .. ","
+				outputStringLine = outputStringLine .. curNickname .. "_" .. "MassWast" .. ","
+				outputStringLine = outputStringLine .. curNickname .. "_" .. "BldPower" .. ","
+				outputStringLine = outputStringLine .. curNickname .. "_" .. "MassProd" .. ","
+				outputStringLine = outputStringLine .. curNickname .. "_" .. "EnrgProd" .. ","
+			end -- (civilian) if check
 		end
+		LOG( 'DJO: ' .. numRecorded .. ' brains being recorded.')
+
 		LOG('DJO:' .. outputStringLine)
 	end
 	
 	if( GetGameTimeSeconds() > nextLogTime ) then
 		outputStringLine = ""
 		nextLogTime = nextLogTime + logIncrement
-		outputStringLine = outputStringLine .. GetGameTimeSeconds() .. ","
+		outputStringLine = outputStringLine .. dRound(GetGameTimeSeconds()) .. ","
+		
 		for index, brain in Brains do
+			if(not ArmyIsCivilian(ArmyBrains[index].ArmyIndex) ) then 
 			if(not ArmyIsOutOfGame(ArmyBrains[index].ArmyIndex)) then 
-
 				-- **** Game generatored Mass/Energy Stats
-				outputStringLine = outputStringLine .. GetArmyStat( brain, "Economy_Income_Mass", 0.0).Value*10 .. ","
+				--outputStringLine = outputStringLine .. GetArmyStat( brain, "Economy_Income_Mass", 0.0).Value*10 .. ","
 				outputStringLine = outputStringLine .. GetArmyStat( brain, "Economy_Income_Energy", 0.0).Value*10 .. ","
+				outputStringLine = outputStringLine .. dRound(GetArmyStat( brain,"Economy_AccumExcess_Mass",0.0).Value) .. ","
 
 				-- **** Build Power
-				local curBuildPower = 0
-				local brnEngies = brain:GetListOfUnits(categories.ENGINEER - categories.ENGINEERSTATION, false)
+				outputStringLine = outputStringLine .. djo_CalcBuildPower(brain) .. ","
+				-- **** Improved Mass Algorithm
+				outputStringLine = outputStringLine .. djo_CalcMassProd(brain) .. ","
+				-- **** Improved Energy Algorithm
+				outputStringLine = outputStringLine .. djo_CalcEnrgProd(brain) .. ","
 				
-				for index, curEng in brnEngies do
-					curBuildPower = curEng:GetBlueprint().Economy.BuildRate + curBuildPower
-				end -- Engies Loop
-				outputStringLine = outputStringLine .. curBuildPower .. ","
-
-				-- **** Improved Mass Algo
-				local curCalcMassProd = 0
-				local brnComs = brain:GetListOfUnits(categories.COMMAND, false)  -- List of Commanders
-				local brnSubComs = brain:GetListOfUnits(categories.SUBCOMMANDER, false)  -- List of Sub Commanders
-				local brnMassExtFabs = brain:GetListOfUnits(categories.MASSPRODUCTION, false)  -- List of Extractors and Fabs
-				local brnHydros = brain:GetListOfUnits(categories.HYDROCARBON, false)  -- List of Hydrocarbons
-				-- yes T4 hydro has 2 mass/sec, we don't know why
-
-				for index, curCom in brnComs do
-					curCalcMassProd = curCom:GetProductionPerSecondMass() + curCalcMassProd
-				end -- Commanders Loop
-				for index, curSCom in brnSubComs do
-					curCalcMassProd = curSCom:GetProductionPerSecondMass() + curCalcMassProd
-				end -- Sub-Commanders Loop
-				for index, curMassEF in brnMassExtFabs do
-					curCalcMassProd = curMassEF:GetBlueprint().Economy.ProductionPerSecondMass + curCalcMassProd
-				end -- Mass Extractor/Fab Loop
-				for index, curHydros in brnHydros do
-					curCalcMassProd = curHydros:GetProductionPerSecondMass() + curCalcMassProd
-				end -- Mass Extractor/Fab Loop
-				outputStringLine = outputStringLine .. curCalcMassProd .. ","
-			
-			else 
+			else  -- Brain is dead, return 0's for all stats
+				outputStringLine = outputStringLine .. 0 .. ","
 				outputStringLine = outputStringLine .. 0 .. ","
 				outputStringLine = outputStringLine .. 0 .. ","
 				outputStringLine = outputStringLine .. 0 .. ","
 				outputStringLine = outputStringLine .. 0 .. ","
 			end -- (out of game) if check
+			end -- (civilian) if check
 		end	-- Brains For Loop
 		LOG('DJO:' .. outputStringLine)
 		
 	end -- Main time limiting if statement
 	
-	
-	
 end -- End djoFn
 
+function djo_CalcEnrgProd(brain)
+	local curCalcEnrgProd = 0
+	
+	local brnComs = brain:GetListOfUnits(categories.COMMAND, false)  -- List of Commanders
+	local brnSubComs = brain:GetListOfUnits(categories.SUBCOMMANDER, false)  -- List of Sub Commanders
+	-- List of Power Gens including HydroCarbons and Paragons
+	local brnPowerGens = brain:GetListOfUnits(categories.ENERGYPRODUCTION, false) 
 
--- simlua LOG(ArmyIsOutOfGame(1))
--- simLua LOG(ArmyIsOutOfGame(ArmyBrains[1].ArmyIndex))
--- simLua LOG(table.getn(ArmyBrains))
---local brnEngies = ArmyBrains[1]:GetListOfUnits(categories.ENGINEER - categories.COMMAND, false)
---	local djoBrains = ArmyBrains
---	local brain = Brains[1]
--- simlua LOG(GetBlueprint(brnEngies[1]).Economy.BuildRate)
+	for index, curCom in brnComs do
+		curCalcEnrgProd = curCom:GetProductionPerSecondEnergy() + curCalcEnrgProd
+	end -- Commanders Loop
+	for index, curSCom in brnSubComs do
+		curCalcEnrgProd = curSCom:GetProductionPerSecondEnergy() + curCalcEnrgProd
+	end -- Sub-Commanders Loop
+	
+	for index, curPowerGen in brnPowerGens do
+	    if(curPowerGen:GetFractionComplete() == 1) then
+			curCalcEnrgProd = curPowerGen:GetProductionPerSecondEnergy() + curCalcEnrgProd
+		end
+	end -- Mass Extractor/Fab Loop
+	
+	return curCalcEnrgProd
+end
+
+function djo_CalcMassProd(brain)
+	local curCalcMassProd = 0
+
+	local brnComs = brain:GetListOfUnits(categories.COMMAND, false)  -- List of Commanders
+	local brnSubComs = brain:GetListOfUnits(categories.SUBCOMMANDER, false)  -- List of Sub Commanders
+	local brnMassExtFabs = brain:GetListOfUnits(categories.MASSPRODUCTION, false)  -- List of Extractors and Fabs including Paragons
+	local brnHydros = brain:GetListOfUnits(categories.HYDROCARBON, false)  -- List of Hydrocarbons
+	-- yes T4 hydro has 2 mass/sec, we don't know why
+
+	for index, curCom in brnComs do
+		curCalcMassProd = curCom:GetProductionPerSecondMass() + curCalcMassProd
+	end -- Commanders Loop
+	for index, curSCom in brnSubComs do
+		curCalcMassProd = curSCom:GetProductionPerSecondMass() + curCalcMassProd
+	end -- Sub-Commanders Loop
+	for index, curMassEF in brnMassExtFabs do
+		curCalcMassProd = curMassEF:GetProductionPerSecondMass() + curCalcMassProd
+	end -- Mass Extractor/Fab Loop
+	for index, curHydros in brnHydros do
+		curCalcMassProd = curHydros:GetProductionPerSecondMass() + curCalcMassProd
+	end -- Mass Extractor/Fab Loop
+	
+	return curCalcMassProd
+end
+
+function djo_CalcBuildPower(brain)
+	local brnEngies = brain:GetListOfUnits(categories.ENGINEER - categories.ENGINEERSTATION, false)
+	local curBuildPower = 0
+	for index, curEng in brnEngies do
+		curBuildPower = curEng:GetBlueprint().Economy.BuildRate + curBuildPower
+	end -- Engies Loop
+	return curBuildPower
+end
+
+function dRound(numIn)
+	local dFloor = math.floor
+	return dFloor(numIn+0.5)
+end
